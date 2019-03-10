@@ -23,13 +23,11 @@ namespace Boulder_Dash
         public bool IsRock() => Whois == Symbol.Rock;
         public bool IsPlayer() => Whois == Symbol.Player;
     }
-
     struct Point
     {
         public int R, C;
         public Point(int i, int j) => (R, C) = (i, j);
     }
-
     struct Game
     {
         public Cell[][] matrix;
@@ -103,7 +101,9 @@ namespace Boulder_Dash
                 matrix[i] = new Cell[m];
                 for (int j = 0; j < m; j++) matrix[i][j] = new Cell(values[r.Next(values.Length)]);
             }
-            return (matrix, SpawnPlayer(matrix));
+            Point p = SpawnPlayer(matrix);
+            matrix[p.R][p.C] = new Cell(Symbol.Player);
+            return (matrix, p);
         }
         private static Point SpawnPlayer(Cell[][] mat)
         {
@@ -226,7 +226,6 @@ namespace Boulder_Dash
             return true;
         }
     }
-
     class Program
     {
         static void Main(string[] args)
@@ -234,12 +233,12 @@ namespace Boulder_Dash
             Console.OutputEncoding = Encoding.UTF8;
             Console.WriteLine("Do you want import from file('example.txt')? If yes write 'y': ");
             Game game;
-            if (Console.ReadLine() == "y")
+            if (Console.ReadLine().ToLower() == "y")
                 game = new Game(0, 0, "example.txt");
             else
             {
                 Console.Write("Please input a size of arrea: ");
-                int[] size = Console.ReadLine().Select(t => Convert.ToInt32(t)).ToArray<int>();
+                int[] size = Console.ReadLine().Split().Select(t => Convert.ToInt32(t)).ToArray<int>();
                 game = new Game(size[0], size[1]);
             }
             game.PrintGame();
