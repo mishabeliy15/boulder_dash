@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Newtonsoft.Json;
 
 namespace Boulder_Dash
 {
@@ -31,6 +32,28 @@ namespace Boulder_Dash
     struct Game
     {
         public Cell[][] matrix;
+
+
+        private void dfs(int i, int j, bool[,] visited)
+        {
+            visited[i, j] = true;
+            if (IsExist(i + 1, j) && !visited[i + 1, j])
+                dfs(i + 1, j, visited);
+            if (IsExist(i - 1, j) && !visited[i - 1, j])
+                dfs(i - 1, j, visited);
+            if (IsExist(i, j + 1) && !visited[i, j + 1])
+                dfs(i, j + 1, visited);
+            if (IsExist(i, j - 1) && !visited[i, j - 1])
+                dfs(i, j - 1, visited);
+        }
+
+        /*public bool IsValidPole()
+        {
+            bool f = false;
+            bool 
+            dfs(PlayerPos.R, PlayerPos.C)
+            return f;
+        }*/
         public int Actions { get; set; }
         public int Rows { private set; get; }
         public int Columns { private set; get; }
@@ -49,7 +72,9 @@ namespace Boulder_Dash
         private Dictionary<Symbol, ConsoleColor> colors;
         public int Score { private set; get; }
         public int Health { private set; get; }
-        public Game(int n, int m, string file = null)
+        public int Diamonds { private set; get; }
+        private int NeedDiamonds;
+        public Game(int n, int m, int diamonds = 0, string file = null)
         {
             colors = new Dictionary<Symbol, ConsoleColor>
             {
@@ -68,6 +93,15 @@ namespace Boulder_Dash
             Columns = matrix[0].Length;
             Score = 0;
             Health = 1;
+            int td = 0;
+            for (int i = 0; i < temp.matrix.Length; i++)
+                for (int j = 0; j < temp.matrix[0].Length; j++)
+                    if (temp.matrix[i][j].Whois == Symbol.Diamond)
+                        td++;
+            if (diamonds < 1 || diamonds > td)
+                diamonds = td;
+            Diamonds = diamonds;
+            NeedDiamonds = diamonds;
         }
         private static (Cell[][] matrix, Point player) ReadMatrixFromTXT(string path = "example.txt")
         {
@@ -160,6 +194,7 @@ namespace Boulder_Dash
                     case Symbol.Diamond:
                         PlayerPos = new Point(i, j);
                         Score += 10;
+                        Diamonds--;
                         Actions++;
                         break;
                     case Symbol.Rock:
@@ -182,12 +217,14 @@ namespace Boulder_Dash
         public void PrintStats()
         {
             Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine($"Health: {Health} | Score: {Score}");
+            Console.WriteLine($"Health: {Health} | Score: {Score} | Scored diamonds: {NeedDiamonds - Diamonds}/{NeedDiamonds}");
         }
         public void PrintGame()
         {
             Console.Clear();
+            Console.BackgroundColor = ConsoleColor.DarkRed;
             PrintStats();
+            Console.BackgroundColor = ConsoleColor.Black;
             PrintMatrix();
             Console.SetCursorPosition(PlayerPos.C, PlayerPos.R + 1);
         }
@@ -217,14 +254,7 @@ namespace Boulder_Dash
                 for (int j = 0; j < Columns; j++)
                     MoveRock(i, j);
         }
-        public bool WinGame()
-        {
-            for (int i = 0; i < Rows; i++)
-                for (int j = 0; j < Columns; j++)
-                    if (matrix[i][j].Whois == Symbol.Diamond)
-                        return false;
-            return true;
-        }
+        public bool WinGame() => Diamonds < 1;
     }
     class Program
     {
@@ -232,17 +262,39 @@ namespace Boulder_Dash
         {
             Console.OutputEncoding = Encoding.UTF8;
             Console.WriteLine("Do you want import from file('example.txt')? If yes write 'y': ");
-            Game game;
+            Game game = new Game();
             if (Console.ReadLine().ToLower() == "y")
-                game = new Game(0, 0, "example.txt");
+            {
+                game = new Game(0, 0, 0, "example.txt");
+                string s = JsonConvert.SerializeObject(game);
+                StreamWriter outp = new StreamWriter("outp.json");
+                outp.WriteLine(s);
+                outp.Close();
+            }
             else
             {
-                Console.Write("Please input a size of arrea: ");
-                int[] size = Console.ReadLine().Split().Select(t => Convert.ToInt32(t)).ToArray<int>();
-                game = new Game(size[0], size[1]);
+                bool val = true;
+                while (val)
+                {
+                    try
+                    {
+                        int diam = 0;
+                        Console.Write("Please input a size of arrea(n m): ");
+                        int[] size = Console.ReadLine().Split().Select(t => Convert.ToInt32(t)).ToArray<int>();
+                        Console.Write("Please input need of diamonds: ");
+                        diam = Convert.ToInt32(Console.ReadLine());
+                        if (size[0] > 0 && size[1] > 0)
+                        {
+                            game = new Game(size[0], size[1], diam);
+                            val = false;
+                        }
+                    }
+                    catch {
+                        Console.WriteLine("Please input valid data.");
+                    }
+                }
             }
             game.PrintGame();
-            Console.SetCursorPosition(game.PlayerPos.C, game.PlayerPos.R + 1);
             ConsoleKey[] controlKey = { ConsoleKey.UpArrow, ConsoleKey.DownArrow, ConsoleKey.LeftArrow, ConsoleKey.RightArrow };
             ConsoleKeyInfo keyinfo = new ConsoleKeyInfo();
             DateTime time = DateTime.Now;
