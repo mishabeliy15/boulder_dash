@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -14,13 +13,14 @@ namespace Boulder_Dash_2_lab
         [JsonProperty]
         protected PlayingField area;
         [JsonProperty]
-        protected Pos pospl;
-        protected Player player { get => (Player) area[pospl.R, pospl.C]; }
+        protected Pos[] pospl;
+        protected Player[] _players;
+        protected Player player(Pos p) => (Player) area[p.R, p.C];
         [JsonProperty]
         public int NeedDiamonds { get; set; } = 1;
         public int ScoredDiamonds { get; set; }
         public Game(){}
-        public Game(int n, int m, int health, int need_dm)
+        public Game(int n, int m, int health, int need_dm, int players=1)
         {
             NeedDiamonds = need_dm;
             area = new PlayingField(n, m);
@@ -28,8 +28,15 @@ namespace Boulder_Dash_2_lab
             Random r = new Random();
             for (int i = 0; i < n; i++)
                 for (int j = 0; j < m; j++) area[i,j] = CreateCellBySym(values[r.Next(values.Length)]);
-            pospl = SpawnPlayer();
-            area[pospl.R, pospl.C] = new Player(health);
+            pospl = new Pos[players];
+            _players = new Player[players];
+            ConsoleColor[] cl = {ConsoleColor.Magenta, ConsoleColor.DarkMagenta};
+            for (int i = 0; i < players; i++)
+            {
+                pospl[i] = SpawnPlayer();
+                _players[i] = new Player(health,cl[i]);
+                area[pospl[i].R, pospl[i].C] = _players[i];
+            }
         }
         public void StartGame()
         {
@@ -47,9 +54,9 @@ namespace Boulder_Dash_2_lab
             while (Console.ReadKey(true).Key != ConsoleKey.X) ;
         }
         public bool IsWin() => ScoredDiamonds >= NeedDiamonds;
-        public bool IsEnd() => IsWin() || player.Health <= 0;
-        private Thread Update() => new Thread(PrintUpdate);
-        private Thread MoveRocksCycle()
+        public bool IsEnd() => IsWin() || _players.All(p => p.Health <= 0);
+        protected Thread Update() => new Thread(PrintUpdate);
+        protected Thread MoveRocksCycle()
         {
             return new Thread(() =>
             {
@@ -59,6 +66,8 @@ namespace Boulder_Dash_2_lab
                     Thread.Sleep(600);
                 }});
         }
+
+        public int FindPosPl(int i, int j) => Array.FindIndex(pospl, p => p != null && i == p.R && j == p.C);
         public void MoveRocks()
         {
             for(int i = area.Rows - 2;i >= 0;i--)
@@ -72,10 +81,19 @@ namespace Boulder_Dash_2_lab
                     }
                     else if (area[i + 1, j] is Player && ((Rock) area[i, j]).IsFalling)
                     {
-                        player.Health--;
-                        Pos np = SpawnPlayer();
-                        (area[np.R, np.C], area[i + 1, j], area[i, j]) = (area[i + 1, j], area[i, j], new Empty());
-                        pospl = np;
+                        int n = FindPosPl(i + 1, j);
+                        _players[n].Health--;
+                        if (_players[n].Health <= 0)
+                        {
+                            pospl[n] = null;
+                            (area[i + 1, j], area[i, j]) = (area[i, j], new Empty());
+                        }
+                        else
+                        {
+                            Pos np = SpawnPlayer();
+                            (area[np.R, np.C], area[i + 1, j], area[i, j]) = (area[i + 1, j], area[i, j], new Empty());
+                            pospl[n] = np;
+                        }
                     }
                     else
                         ((Rock) area[i, j]).IsFalling = false;
@@ -83,12 +101,16 @@ namespace Boulder_Dash_2_lab
         }
         public void KeyListener()
         {
-            var dic = new Dictionary<ConsoleKey, (int i, int j)>
+            var dic = new Dictionary<ConsoleKey, (int i, int j, int n)>
             {
-                [ConsoleKey.UpArrow] = (-1, 0),
-                [ConsoleKey.DownArrow] = (1, 0), 
-                [ConsoleKey.LeftArrow] = (0, -1),
-                [ConsoleKey.RightArrow] = (0, 1)
+                [ConsoleKey.UpArrow] = (-1, 0, 0),
+                [ConsoleKey.DownArrow] = (1, 0, 0), 
+                [ConsoleKey.LeftArrow] = (0, -1, 0),
+                [ConsoleKey.RightArrow] = (0, 1, 0),
+                [ConsoleKey.W] = (-1, 0, 1),
+                [ConsoleKey.S] = (1, 0, 1), 
+                [ConsoleKey.A] = (0, -1, 1),
+                [ConsoleKey.D] = (0, 1, 1)
             }; 
             ConsoleKeyInfo keyinfo = new ConsoleKeyInfo();
             do
@@ -96,7 +118,7 @@ namespace Boulder_Dash_2_lab
             {
                 keyinfo = Console.ReadKey(true);
                 if (dic.ContainsKey(keyinfo.Key))
-                    MoveByVertex(dic[keyinfo.Key].i, dic[keyinfo.Key].j);
+                    MoveByVertex(dic[keyinfo.Key].i, dic[keyinfo.Key].j, dic[keyinfo.Key].n);
             }
             while (!IsEnd());
         }
@@ -122,7 +144,6 @@ namespace Boulder_Dash_2_lab
                 {
                     prev_stats = StatsToString();
                     PrintStats("");
-                    Console.SetCursorPosition(pospl.C, pospl.R + 1);
                 }
                 for (int i = 0; i < area.Rows; i++)
                     for(int j = 0;j < area.Columns;j++)
@@ -131,7 +152,6 @@ namespace Boulder_Dash_2_lab
                             Console.SetCursorPosition(j, i+1);
                             area[i, j].Print();
                             prev[i, j] = area[i, j];
-                            Console.SetCursorPosition(pospl.C, pospl.R + 1);
                         }
                 Thread.Sleep(100);
             }
@@ -141,31 +161,45 @@ namespace Boulder_Dash_2_lab
             Console.Clear();
             PrintStats();
             area.PrintField();
-            Console.SetCursorPosition(pospl.C,pospl.R + 1);
         }
-        private void MovePlayer(int i, int j) => 
-            (area[i, j], area[pospl.R, pospl.C], pospl) = (player, new Empty(), new Pos(i,j));  
-        public bool MoveByVertex(int di, int dj)
+        protected void MovePlayer(int i, int j, int n) => 
+            (area[i, j], area[pospl[n].R, pospl[n].C], pospl[n]) = (_players[n], new Empty(), new Pos(i,j));  
+        public bool MoveByVertex(int di, int dj, int n)
         {
-            (int i, int j) = (pospl.R + di, pospl.C + dj);
+            if (n >= pospl.Length || pospl[n] == null) return false;
+            (int i, int j) = (pospl[n].R + di, pospl[n].C + dj);
             if (!area.IsExist(i, j)) return false;
-            if (area[i, j] is Empty) MovePlayer(i, j);
+            if (area[i, j] is Empty) MovePlayer(i, j, n);
             else if (area[i, j] is Collective)
             {
-                player.Score += ((Collective) area[i, j]).Bonus;
-                if (area[i, j] is Diamond) ScoredDiamonds++;
-                MovePlayer(i, j);
+                _players[n].Score += ((Collective) area[i, j]).Bonus;
+                if (area[i, j] is Diamond) {ScoredDiamonds++; _players[n].Diamonds++;}
+                MovePlayer(i, j, n);
             }else if (area[i, j] is Rock && di == 0 && dj != 0 && area.IsEmpty(i, j + dj))
             {
                 area[i, j + dj] = area[i, j];
-                MovePlayer(i, j);
+                MovePlayer(i, j, n);
             }
             else return false;
             return true;
         }
-        private string StatsToString() =>
-            $"Health: {player.Health} | Score: {player.Score} | Scored diamonds: {ScoredDiamonds}/{NeedDiamonds}"; 
-        private void PrintStats(string sep = "\n")
+
+        protected string StatsToString()
+        {
+            if(_players.Length == 1) 
+                return $"Health: {_players[0].Health} | Score: {_players[0].Score} | Scored diamonds: {ScoredDiamonds}/{NeedDiamonds}";
+            string s = "Health: ";
+            for (int i = 0; i < _players.Length; i++) s += $"{_players[i].Health}; ";
+            s = s.Remove(s.Length - 2) + " | Score: ";
+            int t = 0;
+            for (int i = 0; i < _players.Length; i++){ s += $"{_players[i].Score} + "; t += _players[i].Score;}
+            s = s.Remove(s.Length - 2) + $"= {t} | Diamonds: ";
+            for (int i = 0; i < _players.Length; i++) s += $"{_players[i].Diamonds} + ";
+            s = s.Remove(s.Length - 2) + $"= {ScoredDiamonds}/{NeedDiamonds}";
+            return s;
+        }
+
+        protected void PrintStats(string sep = "\n")
         {
             Console.SetCursorPosition(0, 0);
             Console.ForegroundColor = ConsoleColor.Cyan;
@@ -220,7 +254,7 @@ namespace Boulder_Dash_2_lab
                 for (int j = 0; j < area.Columns; j++)
                 {
                     area[i, j] = CreateCellBySym((Symbol)s[i][j]);
-                    if (area[i, j].IsPlayer) pospl = new Pos(i, j);
+                    if (area[i, j].IsPlayer) pospl[0] = new Pos(i, j);
                 }
         }
         #endregion

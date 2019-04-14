@@ -10,9 +10,11 @@ namespace Boulder_Dash_2_lab
         public override bool IsPlayer { get; } = true;
         public int Health { get; set; }
         public int Score { get; set; }
+        public int Diamonds { get; set; }
         
         public Player() => (Health, Score, IconColor) = (1, 0, ConsoleColor.Magenta);
         public Player(int health) : this() => Health = health;
-        
+        public Player(int health, ConsoleColor color) : this(health) => IconColor = color;
+
     }
 }
