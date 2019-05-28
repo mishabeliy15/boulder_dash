@@ -13,7 +13,8 @@ namespace Boulder_Dash_2_lab
             Console.CursorVisible = false;
             //Game g = Game.LoadGame("example.json");
             Game g = new Game(7, 20,1, 20,2);
-            g.SaveGame("test2.json");
+            Console.WriteLine("FileName: ");
+            g.SaveGame(Console.ReadLine());
             g.StartGame();
         }
     }
